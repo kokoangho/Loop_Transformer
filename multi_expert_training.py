@@ -425,8 +425,13 @@ def train(cfg, train_ds, val_ds, device="cpu"):
     final_val = evaluate(model, val_loader, device)
     t = time.time() - t0
     print(f"\nDone. Best val: {best_val:.4f}, Final val: {final_val:.4f}, time: {t:.1f}s")
-    print(f"Precision gates: {model.capability_moe.precision_gates().detach().cpu().numpy().round(3)}")
+    pg = model.capability_moe.precision_gates()
+    print(f"Precision gates: {pg.detach().cpu().numpy().round(3)}")
     
+    # Save checkpoint
+    ckpt_path = os.path.join(os.path.dirname(__file__), "multi_expert_checkpoint.pt")
+    torch.save(model.state_dict(), ckpt_path)
+    print(f"Checkpoint saved to {ckpt_path}")
     return {
         "params": nparams,
         "best_val": best_val,
