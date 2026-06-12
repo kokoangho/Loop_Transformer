@@ -12,15 +12,16 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 # Same model definition as training
 from multi_expert_training import (
-    MultiExpertMemoryDNN, MixedDomainDataset, get_mixed_data,
-    ExpConfig as _EC, make_model
+    MultiExpertMemoryDNN, make_model, TrainConfig, get_mixed_data,
 )
 
 # Build config matching training
-class Cfg:
-    dim=64; num_heads=4; num_loops=8; seq_len=64; mem_dim=32
-    num_caps=4; moe_k=2; experts_per_cap=4; use_memory_pathway=True
-    use_timestep_emb=True
+cfg = TrainConfig(
+    dim=64, num_heads=4, num_loops=8, mem_dim=32,
+    num_caps=4, moe_k=2, experts_per_cap=4, seq_len=64, bs=16,
+    lr=3e-4, wd=0.1, warmup=200, steps=3000, grad_clip=1.0,
+    log_every=300, eval_every=500,
+)
 
 device = "cpu"
 
@@ -32,7 +33,7 @@ itos = train_ds.itos
 print(f"Vocab: {vocab_size} chars, device: {device}")
 
 # Build model same arch as trained
-model = make_model(vocab_size, Cfg()).to(device)
+model = make_model(vocab_size, cfg).to(device)
 
 # Try loading saved state
 ckpt_path = os.path.join(os.path.dirname(__file__), "multi_expert_checkpoint.pt")

@@ -118,6 +118,7 @@ def get_mixed_data(seq_len=64, stride=32, val_split=0.1):
                 self.examples.append((data[:-1], data[1:], domain))
             self.vocab_size = vocab_size
             self.stoi = stoi
+            self.itos = {i: c for c, i in stoi.items()}
         def __len__(self): return len(self.examples)
         def __getitem__(self, i):
             x, y, d = self.examples[i]

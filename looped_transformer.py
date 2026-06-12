@@ -390,6 +390,9 @@ class LoopedTransformer(nn.Module):
         memory = None
         memory_trace = None
         if self.use_capability_moe and self.capability_moe is not None:
+            # Reset internal Codex bank if applicable
+            if hasattr(self.capability_moe, 'codex'):
+                self.capability_moe.codex.reset_memory()
             cap_bank = self.capability_moe.init_bank(B, device)
             cap_mem = self.capability_moe.init_memory(B, device)
             memory_trace = []

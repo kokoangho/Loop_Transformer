@@ -21,34 +21,43 @@ CAPABILITIES: Tuple[str, str, str, str] = ("memorize", "math", "speak", "reason"
 
 
 class MemoryBank(nn.Module):
-    """Tensor bank for per-step per-capability memory states."""
+    """Tensor bank for per-step per-capability memory states.
+    
+    Uses Python list (no inplace ops) to avoid autograd issues.
+    """
     
     def __init__(self, batch_size: int, n_caps: int, cap_dim: int, max_steps: int):
         super().__init__()
-        device = torch.device('cpu')
-        self.register_buffer('_data', torch.zeros(batch_size, max_steps, n_caps, cap_dim))
-        self.size = 0
-        self.max_steps = max_steps
+        self.batch_size = batch_size
         self.n_caps = n_caps
+        self.cap_dim = cap_dim
+        self.max_steps = max_steps
+        self._store: List[Tensor] = []  # list of [B, C, cap_dim]
     
     def append(self, m: Tensor) -> None:
-        if self.size >= self.max_steps:
+        if len(self._store) >= self.max_steps:
             return
-        B, C, D = m.shape
-        self._data[:, self.size, :, :] = m
-        self.size += 1
+        self._store.append(m)
+    
+    @property
+    def size(self) -> int:
+        return len(self._store)
     
     def get_capability(self, cap_idx: int) -> Tensor:
         """Return all prior steps for one capability: [B, N, cap_dim]"""
-        return self._data[:, :self.size, cap_idx, :]
+        if not self._store:
+            return torch.zeros(self.batch_size, 0, self.cap_dim, device=self._store[0].device if self._store else 'cpu')
+        return torch.stack([s[:, cap_idx, :] for s in self._store], dim=1)
     
     def get_full(self) -> Tensor:
         """Full bank: [B, N, C*cap_dim]"""
-        B, _, C, D = self._data.shape
-        return self._data[:, :self.size].reshape(B, -1, C * D)
+        if not self._store:
+            return torch.zeros(self.batch_size, 0, self.n_caps * self.cap_dim)
+        B = self._store[0].shape[0]
+        return torch.stack([s.reshape(B, -1) for s in self._store], dim=1)
     
     def to(self, device):
-        self._data = self._data.to(device)
+        self._store = [s.to(device) for s in self._store]
         return self
 
 
