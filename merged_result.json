@@ -1,0 +1,46 @@
+{
+  "config": {
+    "dim": 64,
+    "num_heads": 4,
+    "num_loops": 4,
+    "mem_dim": 32,
+    "num_caps": 4,
+    "moe_k": 2,
+    "seq_len": 64,
+    "bs": 16,
+    "lr": 0.0003,
+    "wd": 0.1,
+    "warmup": 50,
+    "steps": 200,
+    "grad_clip": 1.0,
+    "log_every": 20,
+    "eval_every": 100
+  },
+  "results": [
+    {
+      "variant": "looped",
+      "params": 53762,
+      "val_loss": 2.8737728238105773,
+      "time_s": 7.937931537628174
+    },
+    {
+      "variant": "looped+moe",
+      "params": 159302,
+      "val_loss": 2.840757405757904,
+      "time_s": 13.887553453445435
+    },
+    {
+      "variant": "looped+codex",
+      "params": 148342,
+      "val_loss": 2.9764519333839417,
+      "time_s": 15.988808870315552
+    },
+    {
+      "variant": "merged",
+      "params": 157014,
+      "val_loss": 2.9530924677848818,
+      "time_s": 18.289972066879272
+    }
+  ],
+  "verdict": "merged adds expert MoE on top of memory MoE \u2014 2-level routing per capability"
+}
