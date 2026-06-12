@@ -1,0 +1,48 @@
+{
+  "config": {
+    "dim": 64,
+    "num_heads": 4,
+    "vocab_size": 65,
+    "max_seq_len": 64,
+    "num_loops_or_layers": 4,
+    "memory_dim": 16,
+    "batch_size": 16,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.1,
+    "max_steps": 500,
+    "warmup_steps": 100,
+    "grad_clip": 1.0,
+    "log_every": 100,
+    "eval_every": 200,
+    "variant": "all"
+  },
+  "results": [
+    {
+      "variant": "looped",
+      "params": 53762,
+      "final_val_loss": 0.9835,
+      "wall_time_sec": 32.7,
+      "train_losses": [4.1747, 3.3632, 2.1589, 1.3287, 0.8797],
+      "val_losses": [3.3746, 2.1613, 1.2875, 0.9835],
+      "steps": [0, 100, 200, 300, 400]
+    },
+    {
+      "variant": "looped+pathway",
+      "params": 66626,
+      "final_val_loss": 1.2444,
+      "wall_time_sec": 46.7,
+      "train_losses": [4.1196, 3.4196, 2.5363, 1.5831, 1.2705],
+      "val_losses": [3.4600, 2.5658, 1.6084, 1.2444],
+      "steps": [0, 100, 200, 300, 400]
+    },
+    {
+      "variant": "looped+pathway+int4",
+      "params": 66626,
+      "final_val_loss": 3.1025,
+      "wall_time_sec": 54.2,
+      "train_losses": [4.1573, 3.4079, 3.2890, 3.1266, 3.1261],
+      "val_losses": [3.4859, 3.2869, 3.1482, 3.1025],
+      "steps": [0, 100, 200, 300, 400]
+    }
+  ]
+}
