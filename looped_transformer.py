@@ -20,6 +20,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Tuple, Callable
 
+from moe_memory_pathway import CapabilityMoEMemory, MemoryBank
+
 import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
@@ -292,6 +294,9 @@ class LoopedTransformer(nn.Module):
         memory_mlp_dim: Optional[int] = None,
         quantize_bits: Optional[int] = None,  # 8 or 4 for simulated quantization
         use_timestep_emb: bool = True,
+        use_capability_moe: bool = False,
+        num_capabilities: int = 4,
+        moe_k: int = 2,
     ):
         super().__init__()
         self.dim = dim
@@ -299,6 +304,9 @@ class LoopedTransformer(nn.Module):
         self.use_memory_pathway = use_memory_pathway
         self.quantize_bits = quantize_bits
         self.use_timestep_emb = use_timestep_emb
+        self.use_capability_moe = use_capability_moe
+        self.num_capabilities = num_capabilities
+        self.moe_k = moe_k
 
         # Token & position embeddings
         self.token_embedding = nn.Embedding(vocab_size, dim)
@@ -311,7 +319,22 @@ class LoopedTransformer(nn.Module):
         if use_timestep_emb:
             self.timestep_embed = TimestepEmbedding(dim, max_loops=num_loops + 2)
 
-        # Cross-layer memory pathway (optional)
+        # Capability MoE memory pathway (new)
+        if use_capability_moe:
+            assert use_memory_pathway, "MoE memory requires memory_pathway"
+            self.capability_moe = CapabilityMoEMemory(
+                hidden_dim=dim,
+                memory_dim=memory_dim,
+                mlp_dim=memory_mlp_dim or memory_dim * 4,
+                moe_k=moe_k,
+                num_caps=num_capabilities,
+                max_loops=num_loops,
+            )
+            self._cap_bank = None
+        else:
+            self.capability_moe = None
+
+        # Cross-layer memory pathway (original)
         if use_memory_pathway:
             memory_mlp_dim = memory_mlp_dim or memory_dim * 4
             self.memory_cell = CrossLayerMemoryCell(dim, memory_dim, memory_mlp_dim)
@@ -361,13 +384,18 @@ class LoopedTransformer(nn.Module):
             torch.ones(S, S, dtype=torch.bool, device=device), diagonal=1
         )
 
-        # Initialize memory if pathway enabled
-        if self.use_memory_pathway and self.memory_cell is not None:
+        # Initialize memory if pathway enabled (capability MoE takes priority)
+        cap_bank = None
+        cap_mem = None
+        memory = None
+        memory_trace = None
+        if self.use_capability_moe and self.capability_moe is not None:
+            cap_bank = self.capability_moe.init_bank(B, device)
+            cap_mem = self.capability_moe.init_memory(B, device)
+            memory_trace = []
+        elif self.use_memory_pathway and self.memory_cell is not None:
             memory = self.initial_memory.unsqueeze(0).expand(B, -1)
             memory_trace = []
-        else:
-            memory = None
-            memory_trace = None
 
         # Loop the shared block
         for step in range(self.num_loops):
@@ -391,7 +419,12 @@ class LoopedTransformer(nn.Module):
             x = self.shared_block(x, cos, sin, causal_mask)
 
             # Memory update (post-block)
-            if self.use_memory_pathway and self.memory_cell is not None:
+            if self.use_capability_moe and self.capability_moe is not None:
+                cap_mem, injection, cap_bank = self.capability_moe(x, cap_bank, cap_mem)
+                x = x + injection
+                if return_memory_trace:
+                    memory_trace.append(cap_mem)
+            elif self.use_memory_pathway and self.memory_cell is not None:
                 memory, injection = self.memory_cell(x, memory)
                 x = x + injection
                 if return_memory_trace:
@@ -409,6 +442,14 @@ class LoopedTransformer(nn.Module):
                 labels.view(-1),
                 ignore_index=-100,
             )
+
+        # Post-loop DNN refinement (capability MoE only)
+        if self.use_capability_moe and self.capability_moe is not None:
+            refined = self.capability_moe.refine(cap_bank)
+            if refined is not None:
+                proj_refined = self.capability_moe.project(refined).unsqueeze(1)
+                x = x + proj_refined
+                logits = self.lm_head(self.final_norm(x))
 
         return LoopedTransformerOutput(
             logits=logits,
